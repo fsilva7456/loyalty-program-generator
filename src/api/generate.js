@@ -1,39 +1,48 @@
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
-  apiKey: process.env.VITE_OPENAI_API_KEY,
+  apiKey: process.env.VITE_OPENAI_API_KEY
 });
 
 export async function generateLoyaltyProgram(businessName) {
-  const prompt = `Create a detailed loyalty program design for ${businessName}. Include:
-  1. Program name
-  2. Point system structure
-  3. Rewards and benefits
-  4. Membership tiers (if applicable)
-  5. Special perks
-  6. Sign-up process
+  const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
+  Always respond with valid JSON in the following format:
+  {
+    "programName": "string",
+    "description": "string",
+    "pointSystem": {
+      "earning": "string",
+      "redemption": "string"
+    },
+    "tiers": [
+      {
+        "name": "string",
+        "requirements": "string",
+        "benefits": ["string"]
+      }
+    ],
+    "specialPerks": ["string"],
+    "signupProcess": "string"
+  }`;
 
-Format the response as a JSON object.`;
+  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business.`;
 
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
-        {
-          role: 'system',
-          content: 'You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses. Always respond with valid JSON.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
       ],
       temperature: 0.7,
+      response_format: { type: "json_object" }
     });
 
-    return JSON.parse(completion.choices[0].message.content);
+    const response = JSON.parse(completion.choices[0].message.content);
+    console.log('OpenAI response:', response);
+    return response;
   } catch (error) {
     console.error('OpenAI API error:', error);
-    throw new Error('Failed to generate loyalty program');
+    throw new Error('Failed to generate loyalty program: ' + error.message);
   }
 }
