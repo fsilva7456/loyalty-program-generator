@@ -15,7 +15,7 @@ export const drivers = {
 export async function evaluateDriver(openai, driver, program) {
   console.log(`Starting evaluation for ${driver.name} driver`);
 
-  const prompt = `Evaluate this loyalty program specifically on the ${driver.name} driver and its sub-drivers. Return a detailed analysis in JSON format.
+  const prompt = `Evaluate this loyalty program specifically on the ${driver.name} driver and its sub-drivers.
   
   ${driver.name} Driver Definition: ${driver.description}
 
@@ -24,23 +24,7 @@ export async function evaluateDriver(openai, driver, program) {
     .map(([key, sub], index) => `${index + 1}. ${sub.name}: ${sub.description}`)
     .join('\n')}
 
-  Program to evaluate: ${JSON.stringify(program)}
-
-  Return the evaluation in this exact JSON format:
-  {
-    "driverScore": "number 1-10",
-    "overallAssessment": "string",
-    "subDriverAnalysis": {
-      ${Object.keys(driver.subDrivers)
-        .map(key => `"${key}": {
-          "score": "number 1-10",
-          "strengths": ["string"],
-          "weaknesses": ["string"],
-          "improvements": ["string"]
-        }`)
-        .join(',\n      ')}
-    }
-  }`;
+  Program to evaluate: ${JSON.stringify(program)}`;
 
   try {
     console.log(`Making OpenAI API call for ${driver.name} driver`);
@@ -49,25 +33,56 @@ export async function evaluateDriver(openai, driver, program) {
       messages: [
         { 
           role: 'system', 
-          content: `You are a loyalty program analyst specializing in evaluating ${driver.name} aspects of loyalty programs. Be specific and practical in your analysis.`
+          content: `You are a loyalty program analyst specializing in evaluating ${driver.name} aspects of loyalty programs. Always return a valid JSON response matching the exact schema provided.`
         },
         { role: 'user', content: prompt }
       ],
+      response_format: { type: "json_object" },
+      functions: [
+        {
+          name: "analyze_driver",
+          parameters: {
+            type: "object",
+            properties: {
+              driverScore: { type: "number", description: "Score from 1-10" },
+              overallAssessment: { type: "string" },
+              subDriverAnalysis: {
+                type: "object",
+                properties: Object.fromEntries(
+                  Object.keys(driver.subDrivers).map(key => [
+                    key,
+                    {
+                      type: "object",
+                      properties: {
+                        score: { type: "number", description: "Score from 1-10" },
+                        strengths: { type: "array", items: { type: "string" } },
+                        weaknesses: { type: "array", items: { type: "string" } },
+                        improvements: { type: "array", items: { type: "string" } }
+                      },
+                      required: ["score", "strengths", "weaknesses", "improvements"]
+                    }
+                  ])
+                )
+              }
+            },
+            required: ["driverScore", "overallAssessment", "subDriverAnalysis"]
+          }
+        }
+      ],
+      function_call: { name: "analyze_driver" },
       temperature: 0.7
     });
 
     console.log(`Received response for ${driver.name} driver`);
-    const cleanJson = evaluation.choices[0].message.content
-      .replace(/```(json)?\n?/g, '')
-      .trim();
-
+    const functionCallArguments = evaluation.choices[0].message.function_call.arguments;
+    
     try {
-      const parsedResult = JSON.parse(cleanJson);
+      const parsedResult = JSON.parse(functionCallArguments);
       console.log(`Successfully parsed ${driver.name} driver evaluation`);
       return parsedResult;
     } catch (parseError) {
       console.error(`Error parsing ${driver.name} driver response:`, parseError);
-      console.error('Raw response:', cleanJson);
+      console.error('Raw response:', functionCallArguments);
       throw new Error(`Failed to parse ${driver.name} driver evaluation response: ${parseError.message}`);
     }
   } catch (error) {
