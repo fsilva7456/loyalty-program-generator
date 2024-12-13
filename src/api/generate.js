@@ -3,14 +3,13 @@ import { drivers, evaluateDriver } from '../drivers/index.js';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
-const MODEL_NAME = 'gpt-4o-mini';
+const MODEL_NAME = 'gpt-4';
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function validateProgramStructure(program) {
-  // Required fields for a valid loyalty program
   const required = {
     programName: 'string',
     description: 'string',
@@ -23,7 +22,6 @@ function validateProgramStructure(program) {
     signupProcess: 'string'
   };
 
-  // Check all required fields
   for (const [key, type] of Object.entries(required)) {
     if (typeof type === 'string') {
       if (!program[key]) {
@@ -36,7 +34,6 @@ function validateProgramStructure(program) {
         throw new Error(`Field ${key} must be type ${type}`);
       }
     } else {
-      // Handle nested objects (like pointSystem)
       if (!program[key] || typeof program[key] !== 'object') {
         throw new Error(`Missing or invalid object: ${key}`);
       }
@@ -51,10 +48,10 @@ function validateProgramStructure(program) {
     }
   }
 
-  // Validate tiers structure
   if (program.tiers.length === 0) {
     throw new Error('Program must have at least one tier');
   }
+  
   program.tiers.forEach((tier, index) => {
     if (!tier.name || !tier.requirements || !Array.isArray(tier.benefits)) {
       throw new Error(`Invalid tier structure at index ${index}`);
@@ -70,86 +67,102 @@ async function makeOpenAIRequest(openai, messages, source = 'unknown', temperatu
 
   while (attempts < MAX_RETRIES) {
     try {
-      console.log(`[${source}] Attempt ${attempts + 1} of ${MAX_RETRIES}`);
+      console.log(`[${source}] Making API request - Attempt ${attempts + 1}/${MAX_RETRIES}`);
+      console.log(`[${source}] Request messages:`, JSON.stringify(messages, null, 2));
 
       const completion = await openai.chat.completions.create({
         model: MODEL_NAME,
-        messages,
+        messages: [
+          ...messages,
+          {
+            role: 'system',
+            content: 'You must respond with only valid JSON. No markdown, no code blocks, no additional text.'
+          }
+        ],
         temperature,
-        max_tokens: 3000,
-        presence_penalty: 0.1,
-        frequency_penalty: 0.1,
         response_format: { type: 'json_object' },
-        timeout: 60000 // 60 second timeout
+        max_tokens: 4000,
+        timeout: 120000 // 2 minute timeout
       });
 
-      if (!completion.choices?.[0]?.message?.content) {
-        throw new Error('Empty or invalid response from OpenAI');
+      const content = completion.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from OpenAI');
       }
 
-      const content = completion.choices[0].message.content;
-      
+      console.log(`[${source}] Raw API response:`, content);
+
       try {
         const parsed = JSON.parse(content);
-        console.log(`[${source}] Successfully parsed response`);
+        console.log(`[${source}] Successfully parsed JSON response`);
         return parsed;
       } catch (parseError) {
         console.error(`[${source}] JSON parse error:`, parseError);
-        console.error('Raw content:', content);
         throw new Error(`Failed to parse JSON response: ${parseError.message}`);
       }
 
     } catch (error) {
       lastError = error;
       attempts++;
-      console.error(`[${source}] Attempt ${attempts} failed:`, error);
+      console.error(`[${source}] Request failed:`, error);
+
+      if (error.response) {
+        console.error(`[${source}] API Error Details:`, {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      }
 
       if (attempts < MAX_RETRIES) {
-        const delayTime = RETRY_DELAY * attempts;
+        const delayTime = RETRY_DELAY * Math.pow(2, attempts - 1); // Exponential backoff
         console.log(`[${source}] Retrying in ${delayTime}ms...`);
         await delay(delayTime);
       }
     }
   }
 
-  throw new Error(`[${source}] Failed after ${MAX_RETRIES} attempts: ${lastError.message}`);
+  console.error(`[${source}] All retry attempts failed`);
+  throw new Error(`Failed after ${MAX_RETRIES} attempts: ${lastError.message}`);
 }
 
 async function generateInitialProgram(openai, businessName) {
-  const systemPrompt = `You are a loyalty program designer specializing in creating engaging and effective programs.
+  const exampleProgram = {
+    "programName": "Example Rewards",
+    "description": "A loyalty program focused on customer engagement and rewards",
+    "pointSystem": {
+      "earning": "1 point per dollar spent",
+      "redemption": "100 points = $1 in rewards"
+    },
+    "tiers": [
+      {
+        "name": "Bronze",
+        "requirements": "0-499 points",
+        "benefits": ["Basic member discounts", "Birthday reward"]
+      }
+    ],
+    "specialPerks": ["Welcome bonus", "Referral rewards"],
+    "signupProcess": "Simple online registration with email and basic info"
+  };
 
-Create a complete loyalty program for ${businessName} that includes:
-1. Clear point earning and redemption rules
-2. Multiple membership tiers with increasing benefits
-3. Special perks that drive engagement
-4. A simple signup process
+  const systemPrompt = {
+    role: 'system',
+    content: `You are designing a loyalty program for ${businessName}. Create a program that matches this exact JSON structure:
+${JSON.stringify(exampleProgram, null, 2)}
 
-Return a JSON object with exactly this structure:
-{
-  "programName": "string",
-  "description": "string",
-  "pointSystem": {
-    "earning": "string",
-    "redemption": "string"
-  },
-  "tiers": [
-    {
-      "name": "string",
-      "requirements": "string",
-      "benefits": ["string"]
-    }
-  ],
-  "specialPerks": ["string"],
-  "signupProcess": "string"
-}`;
+Include:
+- A memorable program name
+- Clear points system
+- At least 3 membership tiers
+- Engaging special perks
+- Simple signup process`
+  };
 
   const initialProgram = await makeOpenAIRequest(
     openai,
-    [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: 'Generate a complete loyalty program JSON matching the exact structure provided.' }
-    ],
-    'initial_program'
+    [systemPrompt],
+    'initial_program',
+    0.7
   );
 
   validateProgramStructure(initialProgram);
@@ -157,63 +170,53 @@ Return a JSON object with exactly this structure:
 }
 
 async function analyzeProgram(openai, program) {
-  const analysisPrompt = `Analyze this loyalty program focusing on:
-1. Customer psychology and motivation
-2. Engagement mechanics
-3. Reward effectiveness
-4. Technical feasibility
-5. Business impact
+  const exampleAnalysis = {
+    "weaknesses": ["string"],
+    "suggestedImprovements": ["string"],
+    "behavioralAnalysis": {
+      "effectivePrinciples": ["string"],
+      "missedOpportunities": ["string"]
+    }
+  };
 
-Return a JSON object with this structure:
-{
-  "weaknesses": ["string"],
-  "suggestedImprovements": ["string"],
-  "behavioralAnalysis": {
-    "effectivePrinciples": ["string"],
-    "missedOpportunities": ["string"]
-  }
-}`;
+  const systemPrompt = {
+    role: 'system',
+    content: `Analyze this loyalty program. Return a JSON object exactly matching this structure:
+${JSON.stringify(exampleAnalysis, null, 2)}
+
+Focus on:
+1. Program weaknesses
+2. Potential improvements
+3. Behavioral principles used
+4. Missed opportunities`
+  };
+
+  const userPrompt = {
+    role: 'user',
+    content: `Analyze this program:\n${JSON.stringify(program, null, 2)}`
+  };
 
   return await makeOpenAIRequest(
     openai,
-    [
-      { 
-        role: 'system', 
-        content: 'You are a loyalty program analyst specializing in behavioral science and customer psychology.'
-      },
-      { 
-        role: 'user', 
-        content: `${analysisPrompt}\n\nProgram to analyze:\n${JSON.stringify(program, null, 2)}`
-      }
-    ],
+    [systemPrompt, userPrompt],
     'program_analysis'
   );
 }
 
 async function generateImprovedProgram(openai, businessName, initialProgram, analysis, driverAnalyses) {
-  const improvementPrompt = `Create an improved version of this loyalty program addressing all identified issues while maintaining the same JSON structure.
+  const systemPrompt = {
+    role: 'system',
+    content: `You are improving ${businessName}'s loyalty program. Create an enhanced version that addresses these issues while maintaining the exact same JSON structure as the original program.`
+  };
 
-Issues to address:
-${JSON.stringify(analysis, null, 2)}
-
-Driver Analyses:
-${JSON.stringify(driverAnalyses, null, 2)}
-
-Original Program:
-${JSON.stringify(initialProgram, null, 2)}`;
+  const userPrompt = {
+    role: 'user',
+    content: `Original Program: ${JSON.stringify(initialProgram, null, 2)}\n\nAnalysis: ${JSON.stringify(analysis, null, 2)}\n\nDriver Analyses: ${JSON.stringify(driverAnalyses, null, 2)}\n\nCreate an improved version that addresses all identified issues.`
+  };
 
   const improvedProgram = await makeOpenAIRequest(
     openai,
-    [
-      { 
-        role: 'system', 
-        content: `You are a loyalty program improvement specialist working on ${businessName}'s program. Return only valid JSON matching the original program structure.`
-      },
-      { 
-        role: 'user', 
-        content: improvementPrompt
-      }
-    ],
+    [systemPrompt, userPrompt],
     'program_improvement'
   );
 
@@ -230,7 +233,7 @@ export async function generateLoyaltyProgram(businessName) {
 
   const openai = new OpenAI({
     apiKey: process.env.VITE_OPENAI_API_KEY,
-    timeout: 60000,
+    timeout: 120000,
     maxRetries: 3
   });
 
@@ -238,10 +241,12 @@ export async function generateLoyaltyProgram(businessName) {
     // Step 1: Generate initial program
     console.log('Generating initial program...');
     const initialProgram = await generateInitialProgram(openai, businessName);
+    console.log('Initial program generated successfully');
     
     // Step 2: Analyze the program
     console.log('Analyzing program...');
     const analysis = await analyzeProgram(openai, initialProgram);
+    console.log('Program analysis complete');
     
     // Step 3: Evaluate with all drivers
     console.log('Evaluating drivers...');
@@ -266,8 +271,8 @@ export async function generateLoyaltyProgram(businessName) {
       analysis,
       driverAnalyses
     );
+    console.log('Improved program generated successfully');
 
-    console.log('Program generation complete');
     return {
       initial: initialProgram,
       analysis: {
