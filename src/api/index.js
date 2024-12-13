@@ -1,27 +1,25 @@
 import express from 'express';
 import cors from 'cors';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
 
 const app = express();
 
-// Enable CORS with specific options
-app.use(cors({
-  origin: 'http://localhost:5173', // Vite's default port
-  methods: ['POST'],
-  credentials: true
-}));
+console.log('Starting API server...');
 
-// Parse JSON bodies
+app.use(cors());
 app.use(express.json());
+
+// Test endpoint
+app.get('/test', (req, res) => {
+  console.log('Test endpoint hit');
+  res.json({ message: 'API is working!' });
+});
 
 app.post('/api/generate', async (req, res) => {
   try {
-    console.log('Received request:', req.body);
+    console.log('Generate endpoint hit:', req.body);
     const { businessName } = req.body;
     
-    // Temporary response for testing
+    // Mock response for testing
     const mockResponse = {
       programName: `${businessName} Rewards Club`,
       pointSystem: "10 points per $1 spent",
@@ -36,12 +34,17 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// Test endpoint
-app.get('/test', (req, res) => {
-  res.json({ message: 'API is working!' });
+const PORT = 3001;
+app.listen(PORT, () => {
+  console.log(`API server running on http://localhost:${PORT}`);
+  console.log(`Test the API at http://localhost:${PORT}/test`);
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`API server running on port ${PORT}`);
+// Error handling
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
 });
