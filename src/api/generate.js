@@ -107,7 +107,7 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
     
     Consider the following driver evaluations:
     ${Object.entries(driverEvaluations)
-      .map(([key, eval]) => `${key}: ${JSON.stringify(eval)}`)
+      .map(([key, evaluation]) => `${key}: ${JSON.stringify(evaluation)}`)
       .join('\n')}
 
     Return only plain JSON without any markdown formatting.`;
