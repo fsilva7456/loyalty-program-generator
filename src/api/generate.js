@@ -1,11 +1,60 @@
-async function analyzeAndImprove(openai, businessName, initialProgram) {
-  // Get Access driver evaluation
-  console.log('Evaluating Access driver...');
-  const accessEvaluation = await evaluateAccessDriver(openai, initialProgram);
+import OpenAI from 'openai';
+import { drivers, evaluateDriver } from '../drivers';
 
-  // Get Time driver evaluation
-  console.log('Evaluating Time driver...');
-  const timeEvaluation = await evaluateTimeDriver(openai, initialProgram);
+async function generateInitialProgram(openai, businessName) {
+  const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
+  Return only valid JSON without any additional text, markdown, or explanation, using this exact format:
+  {
+    "programName": "string",
+    "description": "string",
+    "pointSystem": {
+      "earning": "string",
+      "redemption": "string"
+    },
+    "tiers": [
+      {
+        "name": "string",
+        "requirements": "string",
+        "benefits": ["string"]
+      }
+    ],
+    "specialPerks": ["string"],
+    "signupProcess": "string"
+  }`;
+
+  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Be innovative and specific with the rewards structure. Return only the JSON response without any markdown formatting.`;
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.7
+  });
+
+  try {
+    const cleanJson = completion.choices[0].message.content
+      .replace(/```(json)?\n?/g, '')
+      .trim();
+    return JSON.parse(cleanJson);
+  } catch (error) {
+    console.error('Error parsing program generation response:', error);
+    throw new Error('Failed to parse program generation response');
+  }
+}
+
+async function analyzeAndImprove(openai, businessName, initialProgram) {
+  // Evaluate all drivers
+  const driverEvaluations = {};
+  const driverNames = Object.keys(drivers);
+  
+  console.log('Evaluating drivers:', driverNames);
+  for (const driverKey of driverNames) {
+    console.log(`Evaluating ${driverKey} driver...`);
+    driverEvaluations[`${driverKey}Evaluation`] = 
+      await evaluateDriver(openai, drivers[driverKey], initialProgram);
+  }
 
   const analysisPrompt = `Analyze this loyalty program for ${businessName} and identify potential weaknesses or areas for improvement. Consider:
   1. Customer psychology and motivation
@@ -34,15 +83,18 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
     temperature: 0.7
   });
 
-  const cleanAnalysisJson = cleanJsonString(analysis.choices[0].message.content);
+  const cleanAnalysisJson = analysis.choices[0].message.content
+    .replace(/```(json)?\n?/g, '')
+    .trim();
   const analysisResult = JSON.parse(cleanAnalysisJson);
 
-  // Generate improved version considering both Access and Time evaluations
+  // Generate improved version considering all driver evaluations
   const improvementPrompt = `Create an improved version of this loyalty program addressing these weaknesses: ${JSON.stringify(analysisResult.weaknesses)}
     
     Consider the following driver evaluations:
-    Access Driver: ${JSON.stringify(accessEvaluation)}
-    Time Driver: ${JSON.stringify(timeEvaluation)}
+    ${Object.entries(driverEvaluations)
+      .map(([key, eval]) => `${key}: ${JSON.stringify(eval)}`)
+      .join('\n')}
 
     Return only plain JSON without any markdown formatting.`;
 
@@ -61,15 +113,16 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
     temperature: 0.7
   });
 
-  const cleanImprovedJson = cleanJsonString(improved.choices[0].message.content);
+  const cleanImprovedJson = improved.choices[0].message.content
+    .replace(/```(json)?\n?/g, '')
+    .trim();
   const improvedProgram = JSON.parse(cleanImprovedJson);
 
   return {
     initial: initialProgram,
     analysis: {
       ...analysisResult,
-      accessEvaluation,
-      timeEvaluation
+      ...driverEvaluations
     },
     improved: improvedProgram
   };
