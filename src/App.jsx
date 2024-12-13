@@ -1,60 +1,92 @@
-  const renderAccessAnalysis = () => (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-semibold mb-6">Access Driver Analysis</h2>
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <h1 className="text-3xl font-bold mb-8 text-center">Loyalty Program Generator</h1>
       
-      <div className="mb-6">
-        <div className="flex items-center mb-4">
-          <h3 className="text-xl font-semibold">Overall Score: </h3>
-          <span className="ml-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
-            {programData.analysis.accessEvaluation.driverScore}/10
-          </span>
+      <form onSubmit={handleSubmit} className="mb-8">
+        <div className="mb-4">
+          <label htmlFor="businessName" className="block text-sm font-medium mb-2">
+            Business Name
+          </label>
+          <input
+            type="text"
+            id="businessName"
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            className="w-full p-2 border rounded-md"
+            placeholder="Enter your business name"
+            required
+          />
         </div>
-        <p className="text-gray-700">{programData.analysis.accessEvaluation.overallAssessment}</p>
-      </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 disabled:bg-gray-400"
+        >
+          {loading ? 'Generating...' : 'Generate Loyalty Program'}
+        </button>
+      </form>
 
-      <div className="space-y-6">
-        {Object.entries(programData.analysis.accessEvaluation.subDriverAnalysis).map(([key, analysis]) => {
-          const title = key.replace(/([A-Z])/g, ' $1').toLowerCase();
-          return (
-            <div key={key} className="p-4 border rounded-lg">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-lg font-semibold capitalize">{title}</h4>
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
-                  {analysis.score}/10
-                </span>
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <p className="font-medium text-green-600">Strengths:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {analysis.strengths.map((strength, i) => (
-                      <li key={i}>{strength}</li>
-                    ))}
-                  </ul>
-                </div>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-md mb-8">
+          {error}
+        </div>
+      )}
 
-                <div>
-                  <p className="font-medium text-red-600">Weaknesses:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {analysis.weaknesses.map((weakness, i) => (
-                      <li key={i}>{weakness}</li>
-                    ))}
-                  </ul>
-                </div>
+      {programData && (
+        <div>
+          <div className="mb-4 border-b">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('initial')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'initial'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Initial Design
+              </button>
+              <button
+                onClick={() => setActiveTab('analysis')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'analysis'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Program Analysis
+              </button>
+              <button
+                onClick={() => setActiveTab('access')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'access'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Access Analysis
+              </button>
+              <button
+                onClick={() => setActiveTab('improved')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'improved'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Improved Design
+              </button>
+            </nav>
+          </div>
 
-                <div>
-                  <p className="font-medium text-blue-600">Suggested Improvements:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {analysis.improvements.map((improvement, i) => (
-                      <li key={i}>{improvement}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+          {activeTab === 'initial' && renderProgram(programData.initial)}
+          {activeTab === 'analysis' && renderAnalysis()}
+          {activeTab === 'access' && renderAccessAnalysis()}
+          {activeTab === 'improved' && renderProgram(programData.improved)}
+        </div>
+      )}
     </div>
   );
+}
+
+export default App;
