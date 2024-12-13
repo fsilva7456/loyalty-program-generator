@@ -1,8 +1,16 @@
 import OpenAI from 'openai';
 
+function cleanJsonString(str) {
+  // Remove markdown code block syntax if present
+  str = str.replace(/```(json)?\n?/g, '');
+  // Remove any leading/trailing whitespace
+  str = str.trim();
+  return str;
+}
+
 async function generateInitialProgram(openai, businessName) {
   const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
-  Return only valid JSON without any additional text or explanation, using this exact format:
+  Return only valid JSON without any additional text, markdown, or explanation, using this exact format:
   {
     "programName": "string",
     "description": "string",
@@ -21,7 +29,7 @@ async function generateInitialProgram(openai, businessName) {
     "signupProcess": "string"
   }`;
 
-  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Be innovative and specific with the rewards structure. Return only the JSON response.`;
+  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Be innovative and specific with the rewards structure. Return only the JSON response without any markdown formatting.`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -32,7 +40,8 @@ async function generateInitialProgram(openai, businessName) {
     temperature: 0.7
   });
 
-  return JSON.parse(completion.choices[0].message.content);
+  const cleanJson = cleanJsonString(completion.choices[0].message.content);
+  return JSON.parse(cleanJson);
 }
 
 async function analyzeAndImprove(openai, businessName, initialProgram) {
@@ -42,7 +51,7 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   3. Technical feasibility
   4. Cost effectiveness
   5. Customer pain points
-  Return only valid JSON in this format:
+  Return only valid JSON without any markdown formatting in this format:
   {
     "weaknesses": ["string"],
     "suggestedImprovements": ["string"]
@@ -51,27 +60,41 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   const analysis = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: 'You are a critical loyalty program analyst.' },
-      { role: 'user', content: `${analysisPrompt}\n\nProgram to analyze: ${JSON.stringify(initialProgram)}` }
+      { 
+        role: 'system', 
+        content: 'You are a critical loyalty program analyst. Return only plain JSON without any markdown formatting.' 
+      },
+      { 
+        role: 'user', 
+        content: `${analysisPrompt}\n\nProgram to analyze: ${JSON.stringify(initialProgram)}` 
+      }
     ],
     temperature: 0.7
   });
 
-  const analysisResult = JSON.parse(analysis.choices[0].message.content);
+  const cleanAnalysisJson = cleanJsonString(analysis.choices[0].message.content);
+  const analysisResult = JSON.parse(cleanAnalysisJson);
 
   // Generate improved version
-  const improvementPrompt = `Create an improved version of this loyalty program addressing these weaknesses: ${JSON.stringify(analysisResult.weaknesses)}\n\nSuggested improvements: ${JSON.stringify(analysisResult.suggestedImprovements)}`;
+  const improvementPrompt = `Create an improved version of this loyalty program addressing these weaknesses: ${JSON.stringify(analysisResult.weaknesses)}\n\nSuggested improvements: ${JSON.stringify(analysisResult.suggestedImprovements)}\n\nReturn only plain JSON without any markdown formatting.`;
 
   const improved = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: 'You are a loyalty program design expert. Return only the improved program in the same JSON format as the original.' },
-      { role: 'user', content: `Original program: ${JSON.stringify(initialProgram)}\n\n${improvementPrompt}` }
+      { 
+        role: 'system', 
+        content: 'You are a loyalty program design expert. Return only plain JSON without any markdown formatting, using the same schema as the original program.' 
+      },
+      { 
+        role: 'user', 
+        content: `Original program: ${JSON.stringify(initialProgram)}\n\n${improvementPrompt}` 
+      }
     ],
     temperature: 0.7
   });
 
-  const improvedProgram = JSON.parse(improved.choices[0].message.content);
+  const cleanImprovedJson = cleanJsonString(improved.choices[0].message.content);
+  const improvedProgram = JSON.parse(cleanImprovedJson);
 
   return {
     initial: initialProgram,
