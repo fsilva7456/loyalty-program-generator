@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ErrorMessage from './components/ErrorMessage';
 
 function App() {
   const [businessName, setBusinessName] = useState('');
@@ -22,7 +23,8 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate program');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to generate program. Please try again.');
       }
 
       const data = await response.json();
@@ -204,9 +206,10 @@ function App() {
       </form>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-md mb-8">
-          {error}
-        </div>
+        <ErrorMessage 
+          message={error}
+          onDismiss={() => setError(null)}
+        />
       )}
 
       {programData && (
