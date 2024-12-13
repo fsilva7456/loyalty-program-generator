@@ -24,65 +24,50 @@ export async function evaluateDriver(openai, driver, program) {
     .map(([key, sub], index) => `${index + 1}. ${sub.name}: ${sub.description}`)
     .join('\n')}
 
+  Return a detailed analysis in this exact JSON format:
+  {
+    "driverScore": "number 1-10",
+    "overallAssessment": "string",
+    "subDriverAnalysis": {
+      ${Object.keys(driver.subDrivers)
+        .map(key => `"${key}": {
+          "score": "number 1-10",
+          "strengths": ["string"],
+          "weaknesses": ["string"],
+          "improvements": ["string"]
+        }`)
+        .join(',\n      ')}
+    }
+  }
+
   Program to evaluate: ${JSON.stringify(program)}`;
 
   try {
     console.log(`Making OpenAI API call for ${driver.name} driver`);
     const evaluation = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         { 
           role: 'system', 
-          content: `You are a loyalty program analyst specializing in evaluating ${driver.name} aspects of loyalty programs. Always return a valid JSON response matching the exact schema provided.`
+          content: `You are a loyalty program analyst specializing in evaluating ${driver.name} aspects of loyalty programs. Return only valid JSON matching the exact schema provided, with no additional text or markdown formatting.`
         },
         { role: 'user', content: prompt }
       ],
-      response_format: { type: "json_object" },
-      functions: [
-        {
-          name: "analyze_driver",
-          parameters: {
-            type: "object",
-            properties: {
-              driverScore: { type: "number", description: "Score from 1-10" },
-              overallAssessment: { type: "string" },
-              subDriverAnalysis: {
-                type: "object",
-                properties: Object.fromEntries(
-                  Object.keys(driver.subDrivers).map(key => [
-                    key,
-                    {
-                      type: "object",
-                      properties: {
-                        score: { type: "number", description: "Score from 1-10" },
-                        strengths: { type: "array", items: { type: "string" } },
-                        weaknesses: { type: "array", items: { type: "string" } },
-                        improvements: { type: "array", items: { type: "string" } }
-                      },
-                      required: ["score", "strengths", "weaknesses", "improvements"]
-                    }
-                  ])
-                )
-              }
-            },
-            required: ["driverScore", "overallAssessment", "subDriverAnalysis"]
-          }
-        }
-      ],
-      function_call: { name: "analyze_driver" },
       temperature: 0.7
     });
 
     console.log(`Received response for ${driver.name} driver`);
-    const functionCallArguments = evaluation.choices[0].message.function_call.arguments;
-    
+    const cleanJson = evaluation.choices[0].message.content
+      .replace(/```(json)?\n?/g, '')
+      .trim();
+
     try {
-      const parsedResult = JSON.parse(functionCallArguments);
+      const parsedResult = JSON.parse(cleanJson);
       console.log(`Successfully parsed ${driver.name} driver evaluation`);
       return parsedResult;
     } catch (parseError) {
       console.error(`Error parsing ${driver.name} driver response:`, parseError);
-      console.error('Raw response:', functionCallArguments);
+      console.error('Raw response:', cleanJson);
       throw new Error(`Failed to parse ${driver.name} driver evaluation response: ${parseError.message}`);
     }
   } catch (error) {
