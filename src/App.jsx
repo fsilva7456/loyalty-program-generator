@@ -3,13 +3,15 @@ import React, { useState } from 'react';
 function App() {
   const [businessName, setBusinessName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loyaltyProgram, setLoyaltyProgram] = useState(null);
+  const [programData, setProgramData] = useState(null);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('improved');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setProgramData(null);
     
     try {
       const response = await fetch('http://localhost:3001/api/generate', {
@@ -26,7 +28,8 @@ function App() {
       }
 
       const data = await response.json();
-      setLoyaltyProgram(data);
+      setProgramData(data);
+      setActiveTab('improved'); // Default to showing improved version
     } catch (error) {
       console.error('Error:', error);
       setError(error.message);
@@ -44,6 +47,64 @@ function App() {
         <ul className="list-disc pl-4">
           {tier.benefits.map((benefit, index) => (
             <li key={index}>{benefit}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+
+  const renderProgram = (program) => (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-2xl font-semibold mb-2">{program.programName}</h2>
+      <p className="text-gray-600 mb-6">{program.description}</p>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Point System</h3>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <p><strong>Earning:</strong> {program.pointSystem.earning}</p>
+          <p><strong>Redemption:</strong> {program.pointSystem.redemption}</p>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Membership Tiers</h3>
+        {program.tiers.map(renderTier)}
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Special Perks</h3>
+        <ul className="list-disc pl-6">
+          {program.specialPerks.map((perk, index) => (
+            <li key={index} className="mb-1">{perk}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="text-xl font-semibold mb-3">Sign-up Process</h3>
+        <p className="text-gray-600">{program.signupProcess}</p>
+      </div>
+    </div>
+  );
+
+  const renderAnalysis = () => (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-2xl font-semibold mb-6">Program Analysis</h2>
+      
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Identified Weaknesses</h3>
+        <ul className="list-disc pl-6">
+          {programData.analysis.weaknesses.map((weakness, index) => (
+            <li key={index} className="mb-2 text-red-600">{weakness}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Suggested Improvements</h3>
+        <ul className="list-disc pl-6">
+          {programData.analysis.suggestedImprovements.map((improvement, index) => (
+            <li key={index} className="mb-2 text-green-600">{improvement}</li>
           ))}
         </ul>
       </div>
@@ -84,37 +145,46 @@ function App() {
         </div>
       )}
 
-      {loyaltyProgram && (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-2xl font-semibold mb-2">{loyaltyProgram.programName}</h2>
-          <p className="text-gray-600 mb-6">{loyaltyProgram.description}</p>
-
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold mb-3">Point System</h3>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p><strong>Earning:</strong> {loyaltyProgram.pointSystem.earning}</p>
-              <p><strong>Redemption:</strong> {loyaltyProgram.pointSystem.redemption}</p>
-            </div>
+      {programData && (
+        <div>
+          <div className="mb-4 border-b">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('initial')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'initial'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Initial Design
+              </button>
+              <button
+                onClick={() => setActiveTab('analysis')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'analysis'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Analysis
+              </button>
+              <button
+                onClick={() => setActiveTab('improved')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'improved'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Improved Design
+              </button>
+            </nav>
           </div>
 
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold mb-3">Membership Tiers</h3>
-            {loyaltyProgram.tiers.map(renderTier)}
-          </div>
-
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold mb-3">Special Perks</h3>
-            <ul className="list-disc pl-6">
-              {loyaltyProgram.specialPerks.map((perk, index) => (
-                <li key={index} className="mb-1">{perk}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-xl font-semibold mb-3">Sign-up Process</h3>
-            <p className="text-gray-600">{loyaltyProgram.signupProcess}</p>
-          </div>
+          {activeTab === 'initial' && renderProgram(programData.initial)}
+          {activeTab === 'analysis' && renderAnalysis()}
+          {activeTab === 'improved' && renderProgram(programData.improved)}
         </div>
       )}
     </div>
