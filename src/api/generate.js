@@ -28,12 +28,12 @@ export async function generateLoyaltyProgram(businessName) {
     "signupProcess": "string"
   }`;
 
-  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Return only the JSON response.`;
+  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Be innovative and specific with the rewards structure. Return only the JSON response.`;
 
   try {
     console.log('Making OpenAI API call...');
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
