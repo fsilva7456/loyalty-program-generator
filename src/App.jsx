@@ -1,3 +1,177 @@
+import React, { useState } from 'react';
+
+function App() {
+  const [businessName, setBusinessName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [programData, setProgramData] = useState(null);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('improved');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setProgramData(null);
+    
+    try {
+      const response = await fetch('http://localhost:3001/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ businessName }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate loyalty program');
+      }
+
+      const data = await response.json();
+      setProgramData(data);
+      setActiveTab('improved');
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderTier = (tier) => (
+    <div key={tier.name} className="mb-4 p-4 border rounded-lg bg-gray-50">
+      <h4 className="font-semibold text-lg mb-2">{tier.name}</h4>
+      <p className="text-gray-600 mb-2">{tier.requirements}</p>
+      <div className="pl-4">
+        <p className="font-medium mb-1">Benefits:</p>
+        <ul className="list-disc pl-4">
+          {tier.benefits.map((benefit, index) => (
+            <li key={index}>{benefit}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+
+  const renderProgram = (program) => (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-2xl font-semibold mb-2">{program.programName}</h2>
+      <p className="text-gray-600 mb-6">{program.description}</p>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Point System</h3>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <p><strong>Earning:</strong> {program.pointSystem.earning}</p>
+          <p><strong>Redemption:</strong> {program.pointSystem.redemption}</p>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Membership Tiers</h3>
+        {program.tiers.map(renderTier)}
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Special Perks</h3>
+        <ul className="list-disc pl-6">
+          {program.specialPerks.map((perk, index) => (
+            <li key={index} className="mb-1">{perk}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="text-xl font-semibold mb-3">Sign-up Process</h3>
+        <p className="text-gray-600">{program.signupProcess}</p>
+      </div>
+    </div>
+  );
+
+  const renderAnalysis = () => (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-2xl font-semibold mb-6">Program Analysis</h2>
+      
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Identified Weaknesses</h3>
+        <ul className="list-disc pl-6">
+          {programData.analysis.weaknesses.map((weakness, index) => (
+            <li key={index} className="mb-2 text-red-600">{weakness}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-3">Suggested Improvements</h3>
+        <ul className="list-disc pl-6">
+          {programData.analysis.suggestedImprovements.map((improvement, index) => (
+            <li key={index} className="mb-2 text-green-600">{improvement}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+
+  const renderAccessAnalysis = () => (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-2xl font-semibold mb-6">Access Driver Analysis</h2>
+      
+      <div className="mb-6">
+        <div className="flex items-center mb-4">
+          <h3 className="text-xl font-semibold">Overall Score: </h3>
+          <span className="ml-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
+            {programData.analysis.accessEvaluation.driverScore}/10
+          </span>
+        </div>
+        <p className="text-gray-700">{programData.analysis.accessEvaluation.overallAssessment}</p>
+      </div>
+
+      <div className="space-y-6">
+        {Object.entries(programData.analysis.accessEvaluation.subDriverAnalysis).map(([key, analysis]) => {
+          const title = key.replace(/([A-Z])/g, ' $1').toLowerCase();
+          return (
+            <div key={key} className="p-4 border rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-lg font-semibold capitalize">{title}</h4>
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
+                  {analysis.score}/10
+                </span>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <p className="font-medium text-green-600">Strengths:</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {analysis.strengths.map((strength, i) => (
+                      <li key={i}>{strength}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div>
+                  <p className="font-medium text-red-600">Weaknesses:</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {analysis.weaknesses.map((weakness, i) => (
+                      <li key={i}>{weakness}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div>
+                  <p className="font-medium text-blue-600">Suggested Improvements:</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {analysis.improvements.map((improvement, i) => (
+                      <li key={i}>{improvement}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       <h1 className="text-3xl font-bold mb-8 text-center">Loyalty Program Generator</h1>
