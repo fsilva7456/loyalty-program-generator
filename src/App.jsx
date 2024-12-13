@@ -29,7 +29,7 @@ function App() {
 
       const data = await response.json();
       setProgramData(data);
-      setActiveTab('improved'); // Default to showing improved version
+      setActiveTab('improved');
     } catch (error) {
       console.error('Error:', error);
       setError(error.message);
@@ -86,109 +86,3 @@ function App() {
       </div>
     </div>
   );
-
-  const renderAnalysis = () => (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-semibold mb-6">Program Analysis</h2>
-      
-      <div className="mb-6">
-        <h3 className="text-xl font-semibold mb-3">Identified Weaknesses</h3>
-        <ul className="list-disc pl-6">
-          {programData.analysis.weaknesses.map((weakness, index) => (
-            <li key={index} className="mb-2 text-red-600">{weakness}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="mb-6">
-        <h3 className="text-xl font-semibold mb-3">Suggested Improvements</h3>
-        <ul className="list-disc pl-6">
-          {programData.analysis.suggestedImprovements.map((improvement, index) => (
-            <li key={index} className="mb-2 text-green-600">{improvement}</li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <h1 className="text-3xl font-bold mb-8 text-center">Loyalty Program Generator</h1>
-      
-      <form onSubmit={handleSubmit} className="mb-8">
-        <div className="mb-4">
-          <label htmlFor="businessName" className="block text-sm font-medium mb-2">
-            Business Name
-          </label>
-          <input
-            type="text"
-            id="businessName"
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            className="w-full p-2 border rounded-md"
-            placeholder="Enter your business name"
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 disabled:bg-gray-400"
-        >
-          {loading ? 'Generating...' : 'Generate Loyalty Program'}
-        </button>
-      </form>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-md mb-8">
-          {error}
-        </div>
-      )}
-
-      {programData && (
-        <div>
-          <div className="mb-4 border-b">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab('initial')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'initial'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Initial Design
-              </button>
-              <button
-                onClick={() => setActiveTab('analysis')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'analysis'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Analysis
-              </button>
-              <button
-                onClick={() => setActiveTab('improved')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'improved'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Improved Design
-              </button>
-            </nav>
-          </div>
-
-          {activeTab === 'initial' && renderProgram(programData.initial)}
-          {activeTab === 'analysis' && renderAnalysis()}
-          {activeTab === 'improved' && renderProgram(programData.improved)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default App;
