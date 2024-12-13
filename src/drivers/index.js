@@ -1,11 +1,13 @@
 import { accessDriver } from './accessDriver.js';
 import { timeDriver } from './timeDriver.js';
 import { financialDriver } from './financialDriver.js';
+import { securityDriver } from './securityDriver.js';
 
 export const drivers = {
   access: accessDriver,
   time: timeDriver,
-  financial: financialDriver
+  financial: financialDriver,
+  security: securityDriver
 };
 
 export async function evaluateDriver(openai, driver, program) {
