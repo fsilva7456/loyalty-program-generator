@@ -81,8 +81,7 @@ async function makeOpenAIRequest(openai, messages, source = 'unknown', temperatu
         ],
         temperature,
         response_format: { type: 'json_object' },
-        max_tokens: 4000,
-        timeout: 120000 // 2 minute timeout
+        max_tokens: 4000
       });
 
       const content = completion.choices?.[0]?.message?.content;
@@ -232,9 +231,7 @@ export async function generateLoyaltyProgram(businessName) {
   }
 
   const openai = new OpenAI({
-    apiKey: process.env.VITE_OPENAI_API_KEY,
-    timeout: 120000,
-    maxRetries: 3
+    apiKey: process.env.VITE_OPENAI_API_KEY
   });
 
   try {
