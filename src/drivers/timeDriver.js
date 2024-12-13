@@ -1,38 +1,26 @@
 export const timeDriver = {
   name: 'Time',
-  description: 'Time-focused drivers aim to respect and optimize the time of loyalty program members, acknowledging that convenience and efficiency are highly valued.',
+  description: 'This category focuses on the temporal aspects of loyalty programs, including duration, frequency, and timing of rewards and interactions.',
   subDrivers: {
-    streamlinedRedemption: {
-      name: 'Streamlined Redemption Processes',
-      description: 'Simplifying steps for point/reward redemption.'
+    programDuration: {
+      name: 'Program Duration',
+      description: 'Length of time rewards remain valid and overall program sustainability.'
     },
-    priorityServices: {
-      name: 'Priority Services',
-      description: 'Offering time-saving priority access to services.'
+    engagementFrequency: {
+      name: 'Engagement Frequency',
+      description: 'How often members need to interact with the program to maintain benefits.'
     },
-    timeSavingTools: {
-      name: 'Access to Time-Saving Tools',
-      description: 'Providing exclusive tools that streamline processes.'
+    rewardTiming: {
+      name: 'Reward Timing',
+      description: 'Speed and timing of reward delivery and point accumulation.'
     },
-    automatedPreferences: {
-      name: 'Automated Preferences',
-      description: 'Utilizing data to automate routine preferences.'
+    seasonalPromotions: {
+      name: 'Seasonal Promotions',
+      description: 'Special offers or bonuses during specific times or seasons.'
     },
-    proactiveInformation: {
-      name: 'Proactive Information Delivery',
-      description: 'Sending timely notifications and reminders.'
-    },
-    easeOfOnboarding: {
-      name: 'Ease of Onboarding',
-      description: 'Simplifying sign-up and initial program understanding.'
-    },
-    mobileInteraction: {
-      name: 'Ease of Mobile Interaction',
-      description: 'Optimizing mobile experience and functionality.'
-    },
-    webInteraction: {
-      name: 'Ease of Web Interaction',
-      description: 'Ensuring efficient website navigation and usage.'
+    membershipCycles: {
+      name: 'Membership Cycles',
+      description: 'Timing of tier upgrades, renewals, and status maintenance.'
     }
   }
 };

@@ -1,34 +1,26 @@
 export const financialDriver = {
   name: 'Financial',
-  description: 'This category focuses on the tangible, monetary benefits that loyalty programs can offer to their members. It includes discounts, cashback offers, special deals, and rewards that have direct financial value.',
+  description: 'This category evaluates the monetary aspects of the loyalty program, including costs, rewards value, and economic sustainability.',
   subDrivers: {
-    promptnessOfReward: {
-      name: 'Promptness of Reward Delivery',
-      description: 'Measures how quickly financial rewards, cashback, or points are credited to the member\'s account following a qualifying action.'
+    rewardValue: {
+      name: 'Reward Value',
+      description: 'Monetary worth of rewards relative to spending required.'
     },
-    transparencyOfTerms: {
-      name: 'Transparency of Terms',
-      description: 'Focuses on how clearly and openly the conditions, terms, and eligibility criteria for financial benefits are communicated to members.'
+    programCosts: {
+      name: 'Program Costs',
+      description: 'Operational and reward fulfillment costs for the business.'
     },
-    perceivedValue: {
-      name: 'Perceived Value',
-      description: 'Concerns the members\' assessment of the worth or usefulness of the financial rewards offered within the loyalty program.'
+    memberSavings: {
+      name: 'Member Savings',
+      description: 'Direct financial benefits and discounts for members.'
     },
-    flexibilityOfUse: {
-      name: 'Flexibility of Use',
-      description: 'Assesses the degree to which financial rewards, points, or discounts can be used across various products, services, or redemption options.'
+    revenueImpact: {
+      name: 'Revenue Impact',
+      description: 'Effect on business revenue and customer lifetime value.'
     },
-    rewardVariety: {
-      name: 'Reward Variety',
-      description: 'Examines the range and diversity of financial rewards available within the loyalty program.'
-    },
-    consistencyOfBenefits: {
-      name: 'Consistency of Benefits',
-      description: 'Evaluates how reliably and predictably the financial benefits are provided to loyalty program members.'
-    },
-    rewardExpiryPolicies: {
-      name: 'Reward Expiry Policies',
-      description: 'Evaluates members\' satisfaction with the policies governing the expiration of rewards, points, or cashback within the loyalty program.'
+    costEfficiency: {
+      name: 'Cost Efficiency',
+      description: 'Balance between program costs and business benefits.'
     }
   }
 };

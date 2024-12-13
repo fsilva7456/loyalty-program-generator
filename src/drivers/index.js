@@ -1,6 +1,6 @@
-import { accessDriver } from './accessDriver';
-import { timeDriver } from './timeDriver';
-import { financialDriver } from './financialDriver';
+import { accessDriver } from './accessDriver.js';
+import { timeDriver } from './timeDriver.js';
+import { financialDriver } from './financialDriver.js';
 
 export const drivers = {
   access: accessDriver,
@@ -8,7 +8,7 @@ export const drivers = {
   financial: financialDriver
 };
 
-export const evaluateDriver = async (openai, driver, program) => {
+export async function evaluateDriver(openai, driver, program) {
   console.log(`Starting evaluation for ${driver.name} driver`);
 
   const prompt = `Evaluate this loyalty program specifically on the ${driver.name} driver and its sub-drivers. Return a detailed analysis in JSON format.
@@ -70,4 +70,4 @@ export const evaluateDriver = async (openai, driver, program) => {
     console.error(`Error in ${driver.name} driver evaluation:`, error);
     throw error;
   }
-};
+}
