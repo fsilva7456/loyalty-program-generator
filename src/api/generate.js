@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { drivers, evaluateDriver } from '../drivers';
+import { drivers, evaluateDriver } from '../drivers/index.js';
 
 async function generateInitialProgram(openai, businessName) {
   const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
