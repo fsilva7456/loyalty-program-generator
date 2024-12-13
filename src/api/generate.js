@@ -3,7 +3,7 @@ import { drivers, evaluateDriver } from '../drivers/index.js';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
-const MODEL_NAME = 'gpt-4';
+const MODEL_NAME = 'gpt-3.5-turbo-1106';
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -73,11 +73,11 @@ async function makeOpenAIRequest(openai, messages, source = 'unknown', temperatu
       const completion = await openai.chat.completions.create({
         model: MODEL_NAME,
         messages: [
-          ...messages,
           {
             role: 'system',
             content: 'You must respond with only valid JSON. No markdown, no code blocks, no additional text.'
-          }
+          },
+          ...messages
         ],
         temperature,
         response_format: { type: 'json_object' },
@@ -146,15 +146,16 @@ async function generateInitialProgram(openai, businessName) {
 
   const systemPrompt = {
     role: 'system',
-    content: `You are designing a loyalty program for ${businessName}. Create a program that matches this exact JSON structure:
+    content: `You are designing a loyalty program for ${businessName}. Create a program that matches this exact JSON structure, responding with only the JSON object and no additional text or formatting:
 ${JSON.stringify(exampleProgram, null, 2)}
 
-Include:
-- A memorable program name
-- Clear points system
-- At least 3 membership tiers
-- Engaging special perks
-- Simple signup process`
+Requirements:
+- A memorable program name related to ${businessName}
+- Clear points system for earning and redemption
+- At least 3 membership tiers with increasing benefits
+- Engaging special perks that drive loyalty
+- Simple signup process
+- Must return only valid JSON matching the example structure exactly`
   };
 
   const initialProgram = await makeOpenAIRequest(
@@ -180,14 +181,14 @@ async function analyzeProgram(openai, program) {
 
   const systemPrompt = {
     role: 'system',
-    content: `Analyze this loyalty program. Return a JSON object exactly matching this structure:
+    content: `Analyze this loyalty program. Return only a JSON object exactly matching this structure with no additional text or formatting:
 ${JSON.stringify(exampleAnalysis, null, 2)}
 
-Focus on:
-1. Program weaknesses
-2. Potential improvements
-3. Behavioral principles used
-4. Missed opportunities`
+Analysis requirements:
+1. Identify program weaknesses
+2. Suggest specific improvements
+3. List effective behavioral principles used
+4. Identify missed opportunities for engagement`
   };
 
   const userPrompt = {
@@ -205,7 +206,7 @@ Focus on:
 async function generateImprovedProgram(openai, businessName, initialProgram, analysis, driverAnalyses) {
   const systemPrompt = {
     role: 'system',
-    content: `You are improving ${businessName}'s loyalty program. Create an enhanced version that addresses these issues while maintaining the exact same JSON structure as the original program.`
+    content: `You are improving ${businessName}'s loyalty program. Create an enhanced version that addresses these issues while returning only a JSON object matching the exact same structure as the original program, with no additional text or formatting.`
   };
 
   const userPrompt = {
