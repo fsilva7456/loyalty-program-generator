@@ -3,225 +3,140 @@ import { drivers, evaluateDriver } from '../drivers/index.js';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
-const MODEL_NAME = 'gpt-3.5-turbo-1106';
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function validateProgramStructure(program) {
-  const required = {
-    programName: 'string',
-    description: 'string',
-    pointSystem: {
-      earning: 'string',
-      redemption: 'string'
-    },
-    tiers: 'array',
-    specialPerks: 'array',
-    signupProcess: 'string'
-  };
-
-  for (const [key, type] of Object.entries(required)) {
-    if (typeof type === 'string') {
-      if (!program[key]) {
-        throw new Error(`Missing required field: ${key}`);
-      }
-      if (type === 'array' && !Array.isArray(program[key])) {
-        throw new Error(`Field ${key} must be an array`);
-      }
-      if (type !== 'array' && typeof program[key] !== type) {
-        throw new Error(`Field ${key} must be type ${type}`);
-      }
-    } else {
-      if (!program[key] || typeof program[key] !== 'object') {
-        throw new Error(`Missing or invalid object: ${key}`);
-      }
-      for (const [subKey, subType] of Object.entries(type)) {
-        if (!program[key][subKey]) {
-          throw new Error(`Missing required field: ${key}.${subKey}`);
-        }
-        if (typeof program[key][subKey] !== subType) {
-          throw new Error(`Field ${key}.${subKey} must be type ${subType}`);
-        }
-      }
-    }
-  }
-
-  if (program.tiers.length === 0) {
-    throw new Error('Program must have at least one tier');
-  }
-  
-  program.tiers.forEach((tier, index) => {
-    if (!tier.name || !tier.requirements || !Array.isArray(tier.benefits)) {
-      throw new Error(`Invalid tier structure at index ${index}`);
-    }
-  });
-
-  return true;
-}
-
-async function makeOpenAIRequest(openai, messages, source = 'unknown', temperature = 0.7) {
+async function makeOpenAIRequest(openai, messages, model = 'gpt-4', temperature = 0.7) {
   let attempts = 0;
-  let lastError = null;
-
   while (attempts < MAX_RETRIES) {
     try {
-      console.log(`[${source}] Making API request - Attempt ${attempts + 1}/${MAX_RETRIES}`);
-      console.log(`[${source}] Request messages:`, JSON.stringify(messages, null, 2));
-
       const completion = await openai.chat.completions.create({
-        model: MODEL_NAME,
-        messages: [
-          {
-            role: 'system',
-            content: 'You must respond with only valid JSON. No markdown, no code blocks, no additional text.'
-          },
-          ...messages
-        ],
+        model,
+        messages,
         temperature,
-        response_format: { type: 'json_object' },
-        max_tokens: 4000
+        max_tokens: 2500
       });
 
-      const content = completion.choices?.[0]?.message?.content;
+      if (!completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+        throw new Error('Invalid response structure from OpenAI');
+      }
+
+      const content = completion.choices[0].message.content;
       if (!content) {
         throw new Error('Empty response from OpenAI');
       }
 
-      console.log(`[${source}] Raw API response:`, content);
-
       try {
-        const parsed = JSON.parse(content);
-        console.log(`[${source}] Successfully parsed JSON response`);
-        return parsed;
+        return JSON.parse(content);
       } catch (parseError) {
-        console.error(`[${source}] JSON parse error:`, parseError);
+        console.error('JSON parse error:', parseError);
+        console.error('Raw content:', content);
         throw new Error(`Failed to parse JSON response: ${parseError.message}`);
       }
-
     } catch (error) {
-      lastError = error;
       attempts++;
-      console.error(`[${source}] Request failed:`, error);
+      console.error(`Attempt ${attempts} failed:`, error);
 
-      if (error.response) {
-        console.error(`[${source}] API Error Details:`, {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data
-        });
+      if (attempts === MAX_RETRIES) {
+        throw new Error(`Failed after ${MAX_RETRIES} attempts: ${error.message}`);
       }
 
-      if (attempts < MAX_RETRIES) {
-        const delayTime = RETRY_DELAY * Math.pow(2, attempts - 1); // Exponential backoff
-        console.log(`[${source}] Retrying in ${delayTime}ms...`);
-        await delay(delayTime);
-      }
+      await delay(RETRY_DELAY);
     }
   }
-
-  console.error(`[${source}] All retry attempts failed`);
-  throw new Error(`Failed after ${MAX_RETRIES} attempts: ${lastError.message}`);
 }
 
 async function generateInitialProgram(openai, businessName) {
   const exampleProgram = {
-    "programName": "Example Rewards",
-    "description": "A loyalty program focused on customer engagement and rewards",
-    "pointSystem": {
-      "earning": "1 point per dollar spent",
-      "redemption": "100 points = $1 in rewards"
+    programName: "Example Rewards",
+    description: "A loyalty program focused on customer engagement and rewards",
+    pointSystem: {
+      earning: "1 point per dollar spent",
+      redemption: "100 points = $1 in rewards"
     },
-    "tiers": [
+    tiers: [
       {
-        "name": "Bronze",
-        "requirements": "0-499 points",
-        "benefits": ["Basic member discounts", "Birthday reward"]
+        name: "Bronze",
+        requirements: "0-499 points",
+        benefits: ["Basic member discounts", "Birthday reward"]
       }
     ],
-    "specialPerks": ["Welcome bonus", "Referral rewards"],
-    "signupProcess": "Simple online registration with email and basic info"
+    specialPerks: ["Welcome bonus", "Referral rewards"],
+    signupProcess: "Simple online registration with email and basic info"
   };
 
-  const systemPrompt = {
-    role: 'system',
-    content: `You are designing a loyalty program for ${businessName}. Create a program that matches this exact JSON structure, responding with only the JSON object and no additional text or formatting:
+  const systemPrompt = `Create a loyalty program for ${businessName}. Return a JSON object matching this structure exactly:
+
 ${JSON.stringify(exampleProgram, null, 2)}
 
-Requirements:
-- A memorable program name related to ${businessName}
-- Clear points system for earning and redemption
-- At least 3 membership tiers with increasing benefits
-- Engaging special perks that drive loyalty
-- Simple signup process
-- Must return only valid JSON matching the example structure exactly`
-  };
+Include:
+- A memorable program name
+- Clear points system
+- At least 3 membership tiers
+- Engaging special perks
+- Simple signup process`;
 
-  const initialProgram = await makeOpenAIRequest(
-    openai,
-    [systemPrompt],
-    'initial_program',
-    0.7
-  );
-
-  validateProgramStructure(initialProgram);
-  return initialProgram;
+  return await makeOpenAIRequest(openai, [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: 'Generate the complete program JSON.' }
+  ]);
 }
 
 async function analyzeProgram(openai, program) {
-  const exampleAnalysis = {
-    "weaknesses": ["string"],
-    "suggestedImprovements": ["string"],
-    "behavioralAnalysis": {
-      "effectivePrinciples": ["string"],
-      "missedOpportunities": ["string"]
+  const analysisPrompt = `Analyze this loyalty program focusing on:
+1. Program weaknesses
+2. Potential improvements
+3. Behavioral principles used
+4. Missed opportunities
+
+Return a JSON object with this structure:
+{
+  "weaknesses": ["string"],
+  "suggestedImprovements": ["string"],
+  "behavioralAnalysis": {
+    "effectivePrinciples": ["string"],
+    "missedOpportunities": ["string"]
+  }
+}`;
+
+  return await makeOpenAIRequest(openai, [
+    { 
+      role: 'system', 
+      content: 'You are a loyalty program analyst specializing in behavioral science and customer psychology.'
+    },
+    { 
+      role: 'user', 
+      content: `${analysisPrompt}\n\nProgram to analyze: ${JSON.stringify(program, null, 2)}`
     }
-  };
-
-  const systemPrompt = {
-    role: 'system',
-    content: `Analyze this loyalty program. Return only a JSON object exactly matching this structure with no additional text or formatting:
-${JSON.stringify(exampleAnalysis, null, 2)}
-
-Analysis requirements:
-1. Identify program weaknesses
-2. Suggest specific improvements
-3. List effective behavioral principles used
-4. Identify missed opportunities for engagement`
-  };
-
-  const userPrompt = {
-    role: 'user',
-    content: `Analyze this program:\n${JSON.stringify(program, null, 2)}`
-  };
-
-  return await makeOpenAIRequest(
-    openai,
-    [systemPrompt, userPrompt],
-    'program_analysis'
-  );
+  ]);
 }
 
 async function generateImprovedProgram(openai, businessName, initialProgram, analysis, driverAnalyses) {
-  const systemPrompt = {
-    role: 'system',
-    content: `You are improving ${businessName}'s loyalty program. Create an enhanced version that addresses these issues while returning only a JSON object matching the exact same structure as the original program, with no additional text or formatting.`
-  };
+  const improvementPrompt = `Create an improved version of this loyalty program addressing all identified issues.
 
-  const userPrompt = {
-    role: 'user',
-    content: `Original Program: ${JSON.stringify(initialProgram, null, 2)}\n\nAnalysis: ${JSON.stringify(analysis, null, 2)}\n\nDriver Analyses: ${JSON.stringify(driverAnalyses, null, 2)}\n\nCreate an improved version that addresses all identified issues.`
-  };
+Use the exact same JSON structure as the original program.
 
-  const improvedProgram = await makeOpenAIRequest(
-    openai,
-    [systemPrompt, userPrompt],
-    'program_improvement'
-  );
+Original Program:
+${JSON.stringify(initialProgram, null, 2)}
 
-  validateProgramStructure(improvedProgram);
-  return improvedProgram;
+Analysis:
+${JSON.stringify(analysis, null, 2)}
+
+Driver Analyses:
+${JSON.stringify(driverAnalyses, null, 2)}`;
+
+  return await makeOpenAIRequest(openai, [
+    { 
+      role: 'system', 
+      content: `You are a loyalty program improvement specialist working on ${businessName}'s program. Return only a JSON object matching the original structure.`
+    },
+    { 
+      role: 'user', 
+      content: improvementPrompt
+    }
+  ]);
 }
 
 export async function generateLoyaltyProgram(businessName) {
