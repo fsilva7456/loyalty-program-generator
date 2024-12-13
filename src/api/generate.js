@@ -9,7 +9,7 @@ export async function generateLoyaltyProgram(businessName) {
   });
 
   const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
-  Always respond with valid JSON in the following format:
+  Return only valid JSON without any additional text or explanation, using this exact format:
   {
     "programName": "string",
     "description": "string",
@@ -28,18 +28,17 @@ export async function generateLoyaltyProgram(businessName) {
     "signupProcess": "string"
   }`;
 
-  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business.`;
+  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Return only the JSON response.`;
 
   try {
     console.log('Making OpenAI API call...');
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-3.5-turbo',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
+      temperature: 0.7
     });
 
     console.log('OpenAI API call successful');
