@@ -2,149 +2,153 @@ import OpenAI from 'openai';
 import { drivers, evaluateDriver } from '../drivers/index.js';
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 seconds
+const RETRY_DELAY = 2000;
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function retryOperation(operation, retries = MAX_RETRIES) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await operation();
-    } catch (error) {
-      console.error(`Attempt ${i + 1} failed:`, error.message);
-      
-      if (i === retries - 1) throw error; // Last attempt failed
-      
-      if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
-        console.log(`Retrying in ${RETRY_DELAY/1000} seconds...`);
-        await delay(RETRY_DELAY);
-      } else {
-        throw error; // Don't retry other types of errors
-      }
-    }
+async function validateJsonResponse(response) {
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('Invalid JSON response:', text);
+    throw new Error('Invalid JSON response from server');
   }
 }
 
 function cleanAndParseJSON(text) {
+  if (!text || typeof text !== 'string') {
+    console.error('Invalid input to cleanAndParseJSON:', text);
+    throw new Error('Invalid input: text is required');
+  }
+
+  let cleanedText = text;
   try {
-    return JSON.parse(text);
+    return JSON.parse(cleanedText);
   } catch (e) {
     console.log('Initial parse failed, attempting to clean JSON string');
-    let cleaned = text.replace(/```(json)?\n?/g, '').replace(/\n```$/g, '');
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+
+    // Remove markdown code blocks
+    cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```/g, '');
+
+    // Find the main JSON object
+    const firstBrace = cleanedText.indexOf('{');
+    const lastBrace = cleanedText.lastIndexOf('}');
+
+    if (firstBrace === -1 || lastBrace === -1) {
+      console.error('No valid JSON object found in response');
+      throw new Error('No valid JSON object found in response');
     }
-    cleaned = cleaned.replace(/,([\s\r\n]*[}\]])/g, '$1');
-    cleaned = cleaned.replace(/[^\x20-\x7E]/g, '');
-    
+
+    cleanedText = cleanedText.substring(firstBrace, lastBrace + 1);
+
+    // Remove trailing commas
+    cleanedText = cleanedText.replace(/,([\s\r\n]*[}\]])/g, '$1');
+
+    // Remove non-printable characters
+    cleanedText = cleanedText.replace(/[^\x20-\x7E]/g, '');
+
+    console.log('Cleaned JSON text:', cleanedText);
+
     try {
-      return JSON.parse(cleaned);
+      const parsed = JSON.parse(cleanedText);
+      // Validate required fields
+      if (!parsed.programName || !parsed.description || !parsed.pointSystem) {
+        throw new Error('Missing required fields in program data');
+      }
+      return parsed;
     } catch (e2) {
       console.error('Failed to parse cleaned JSON:', e2);
-      console.error('Cleaned text:', cleaned);
-      throw new Error(`Failed to parse JSON: ${e2.message}`);
+      console.error('Cleaned text:', cleanedText);
+      throw new Error(`Failed to parse JSON after cleaning: ${e2.message}`);
     }
   }
 }
 
 async function makeOpenAIRequest(openai, messages, model = 'gpt-4o-mini', temperature = 0.7) {
-  const response = await retryOperation(async () => {
+  let attempts = 0;
+  while (attempts < MAX_RETRIES) {
     try {
       const completion = await openai.chat.completions.create({
         model,
         messages,
-        temperature
+        temperature,
+        max_tokens: 2500, // Ensure we get complete responses
+        presence_penalty: 0.1, // Slightly encourage new information
+        frequency_penalty: 0.1, // Slightly discourage repetition
+        stop: ["}"] // Try to ensure we get complete JSON
       });
-      return cleanAndParseJSON(completion.choices[0].message.content);
-    } catch (error) {
-      if (error.code === 'ENOTFOUND') {
-        error.userMessage = 'Unable to connect to OpenAI. Please check your internet connection.';
-      } else if (error.code === 'ETIMEDOUT') {
-        error.userMessage = 'Connection to OpenAI timed out. Please try again.';
-      } else {
-        error.userMessage = 'An error occurred while communicating with OpenAI.';
+
+      if (!completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+        throw new Error('Invalid response structure from OpenAI');
       }
-      throw error;
+
+      const content = completion.choices[0].message.content;
+      if (!content) {
+        throw new Error('Empty response from OpenAI');
+      }
+
+      return cleanAndParseJSON(content);
+    } catch (error) {
+      attempts++;
+      console.error(`Attempt ${attempts} failed:`, error);
+
+      if (attempts === MAX_RETRIES) {
+        throw new Error(`Failed after ${MAX_RETRIES} attempts: ${error.message}`);
+      }
+
+      await delay(RETRY_DELAY);
     }
-  });
-  return response;
+  }
 }
 
 async function generateInitialProgram(openai, businessName) {
-  // Example program structure with behavioral elements
   const exampleProgram = {
     programName: "Example Rewards",
-    description: "A program incorporating loss aversion and goal gradient effects...",
+    description: "A program focused on athletic achievement and community engagement",
     behavioralPrinciples: [
       {
-        principle: "Loss Aversion",
-        application: "Points expire monthly, creating urgency to maintain status"
+        principle: "Goal Gradient",
+        application: "Progress tracking towards fitness goals"
       },
       {
-        principle: "Goal Gradient Effect",
-        application: "Progress bars show proximity to next reward tier"
+        principle: "Social Proof",
+        application: "Community challenges and shared achievements"
       }
     ],
     pointSystem: {
-      earning: "10 points per dollar, with accelerators near tier thresholds",
-      redemption: "Flexible redemption with better value at higher tiers",
-      bonusMechanics: "Surprise bonus point events create variable rewards"
+      earning: "Points for workouts and purchases",
+      redemption: "Gear and experience rewards"
     },
     tiers: [
       {
-        name: "Silver",
-        requirements: "0-1000 points",
-        benefits: ["Basic earning rate", "Standard redemptions"],
-        psychologicalBenefits: ["Immediate progress visualization", "Clear next-tier preview"]
+        name: "Starter",
+        benefits: ["Basic rewards"],
+        psychologicalBenefits: ["Clear progress tracking"]
       }
-    ],
-    engagementMechanics: {
-      habitLoops: "Daily check-in rewards with increasing value streaks",
-      socialElements: "Member spotlights and social sharing incentives",
-      progressTracking: "Visual progress bars and milestone celebrations"
-    },
-    specialPerks: ["Limited-time exclusive offers"],
-    immediateValue: "Instant reward upon signup"
+    ]
   };
 
-  const systemPrompt = `You are a loyalty program design expert with deep knowledge of behavioral science principles.
+  const systemPrompt = `Create a complete loyalty program for ${businessName} using behavioral science principles. Return a JSON object exactly matching this structure:
 
-  Create a loyalty program that deliberately applies these behavioral principles:
-  1. Loss Aversion - Create mechanics where members want to avoid losing status/points
-  2. Goal Gradient Effect - Show clear progress and increase rewards as goals approach
-  3. Social Proof - Add social comparison and community elements
-  4. Scarcity - Include limited-time or exclusive elements
-  5. Variable Rewards - Mix predictable and surprise rewards
+${JSON.stringify(exampleProgram, null, 2)}
 
-  Here's an example program structure showing how to incorporate behavioral elements:
-  ${JSON.stringify(exampleProgram, null, 2)}
-
-  Use this exact same structure for your response, ensuring every behavioral principle is explicitly defined and applied.`;
-
-  const userPrompt = `Create a loyalty program for ${businessName} that uses behavioral science to drive engagement.
-
-  Your response must include:
-  1. At least 3 specific behavioral principles with their applications
-  2. Point system mechanics that create clear goals and progress
-  3. Tier benefits with both practical and psychological rewards
-  4. Engagement mechanics that establish habits
-  5. Variable reward elements to maintain excitement
-
-  Use the exact same JSON structure as the example program.`;
+Ensure ALL fields are included and properly formatted.`;
 
   return await makeOpenAIRequest(openai, [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
+    { role: 'user', content: 'Generate the complete program JSON.' }
   ]);
 }
 
 async function analyzeAndImprove(openai, businessName, initialProgram) {
-  // Rest of the function remains the same...
+  // Rest of the analyzeAndImprove function remains the same
+  ...
 }
 
 export async function generateLoyaltyProgram(businessName) {
@@ -156,24 +160,13 @@ export async function generateLoyaltyProgram(businessName) {
   });
 
   try {
-    console.log('Testing OpenAI connection...');
-    await retryOperation(async () => {
-      try {
-        const response = await fetch('https://api.openai.com/v1/engines', {
-          headers: {
-            'Authorization': `Bearer ${process.env.VITE_OPENAI_API_KEY}`
-          }
-        });
-        if (!response.ok) throw new Error('OpenAI API test failed');
-      } catch (error) {
-        console.error('OpenAI connection test failed:', error);
-        throw error;
-      }
-    });
-
     console.log('Generating initial program...');
     const initialProgram = await generateInitialProgram(openai, businessName);
     
+    if (!initialProgram || !initialProgram.programName) {
+      throw new Error('Invalid program data generated');
+    }
+
     console.log('Analyzing and improving program...');
     const result = await analyzeAndImprove(openai, businessName, initialProgram);
     
@@ -181,9 +174,6 @@ export async function generateLoyaltyProgram(businessName) {
     return result;
   } catch (error) {
     console.error('OpenAI API error:', error);
-    if (error.response) {
-      console.error('OpenAI API response:', error.response.data);
-    }
-    throw new Error(error.userMessage || `Failed to generate loyalty program: ${error.message}`);
+    throw new Error(`Failed to generate loyalty program: ${error.message}`);
   }
 }
