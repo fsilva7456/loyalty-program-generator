@@ -1,11 +1,16 @@
 @echo off
 
-REM Start Vite development server in a new window
-start "Vite Dev Server" cmd /k "npm run dev"
+echo Starting Loyalty Program Generator...
 
-REM Start API server in a new window with full output
-start "API Server" cmd /k "node src/api/index.js"
+:: Start Frontend (Vite)
+start "Frontend - Vite" cmd /k "npm run dev"
 
-echo Both servers are starting in separate windows.
-echo Close this window when you're done.
-pause
+:: Wait 2 seconds to ensure frontend starts first
+timeout /t 2 /nobreak > nul
+
+:: Start Backend (Express)
+start "Backend - Express" cmd /k "npm run server"
+
+echo Started both servers successfully!
+echo Frontend: http://localhost:5173
+echo Backend: http://localhost:3001
