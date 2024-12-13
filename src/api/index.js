@@ -1,5 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import * as dotenv from 'dotenv';
+import { generateLoyaltyProgram } from './generate.js';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 
@@ -19,15 +24,12 @@ app.post('/api/generate', async (req, res) => {
     console.log('Generate endpoint hit:', req.body);
     const { businessName } = req.body;
     
-    // Mock response for testing
-    const mockResponse = {
-      programName: `${businessName} Rewards Club`,
-      pointSystem: "10 points per $1 spent",
-      tiers: ["Basic", "Silver", "Gold"],
-      benefits: ["Birthday rewards", "Monthly specials", "Free items"]
-    };
-    
-    res.json(mockResponse);
+    if (!process.env.VITE_OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not found');
+    }
+
+    const program = await generateLoyaltyProgram(businessName);
+    res.json(program);
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ error: error.message });
