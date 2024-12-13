@@ -1,6 +1,41 @@
 import OpenAI from 'openai';
 import { drivers, evaluateDriver } from '../drivers/index.js';
 
+function cleanAndParseJSON(text) {
+  try {
+    // First, try direct parsing
+    return JSON.parse(text);
+  } catch (e) {
+    // If that fails, try to clean the text
+    console.log('Initial parse failed, attempting to clean JSON string');
+    
+    // Remove any markdown code blocks
+    let cleaned = text.replace(/```(json)?\n?/g, '').replace(/\n```$/g, '');
+    
+    // Remove any non-JSON text before or after the JSON object
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+    }
+    
+    // Remove any trailing commas before closing braces/brackets
+    cleaned = cleaned.replace(/,([\s\r\n]*[}\]])/g, '$1');
+    
+    // Remove any non-printable characters
+    cleaned = cleaned.replace(/[^\x20-\x7E]/g, '');
+    
+    try {
+      return JSON.parse(cleaned);
+    } catch (e2) {
+      console.error('Failed to parse cleaned JSON:', e2);
+      console.error('Cleaned text:', cleaned);
+      throw new Error(`Failed to parse JSON: ${e2.message}`);
+    }
+  }
+}
+
 async function generateInitialProgram(openai, businessName) {
   const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
   Return only valid JSON without any additional text, markdown, or explanation, using this exact format:
@@ -34,10 +69,7 @@ async function generateInitialProgram(openai, businessName) {
   });
 
   try {
-    const cleanJson = completion.choices[0].message.content
-      .replace(/```(json)?\n?/g, '')
-      .trim();
-    return JSON.parse(cleanJson);
+    return cleanAndParseJSON(completion.choices[0].message.content);
   } catch (error) {
     console.error('Error parsing program generation response:', error);
     console.error('Raw response:', completion.choices[0].message.content);
@@ -74,15 +106,19 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   // Collect all improvements from driver evaluations
   const driverImprovements = [];
   Object.entries(driverEvaluations).forEach(([driverName, evaluation]) => {
-    Object.entries(evaluation.subDriverAnalysis).forEach(([subDriver, analysis]) => {
-      analysis.improvements.forEach(improvement => {
-        driverImprovements.push({
-          driver: driverName,
-          subDriver,
-          improvement
-        });
+    if (evaluation.subDriverAnalysis) {
+      Object.entries(evaluation.subDriverAnalysis).forEach(([subDriver, analysis]) => {
+        if (analysis.improvements) {
+          analysis.improvements.forEach(improvement => {
+            driverImprovements.push({
+              driver: driverName,
+              subDriver,
+              improvement
+            });
+          });
+        }
       });
-    });
+    }
   });
 
   const analysisPrompt = `Analyze this loyalty program for ${businessName} and identify potential weaknesses and areas for improvement. Consider:
@@ -112,10 +148,7 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
     temperature: 0.7
   });
 
-  const cleanAnalysisJson = analysis.choices[0].message.content
-    .replace(/```(json)?\n?/g, '')
-    .trim();
-  const analysisResult = JSON.parse(cleanAnalysisJson);
+  const analysisResult = cleanAndParseJSON(analysis.choices[0].message.content);
 
   // Generate improved version considering all general and driver-specific improvements
   const improvementPrompt = `Create an improved version of this loyalty program addressing both general weaknesses and specific driver improvements.
@@ -132,24 +165,21 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   Original Program:
   ${JSON.stringify(initialProgram, null, 2)}
 
-  Create a comprehensive improved version that addresses all these points while maintaining a cohesive and practical program design. Return only the JSON response using the exact same format as the original program.`;
+  Create a comprehensive improved version that addresses all these points while maintaining a cohesive and practical program design. Return only the JSON response using the exact same format as the original program, with no additional text or formatting.`;
 
   const improved = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       { 
         role: 'system', 
-        content: 'You are a loyalty program design expert. Return only plain JSON without any markdown formatting, using the same schema as the original program.' 
+        content: 'You are a loyalty program design expert. Return only plain JSON without any markdown formatting, using the same schema as the original program. Do not include any additional text or explanations.' 
       },
       { role: 'user', content: improvementPrompt }
     ],
     temperature: 0.7
   });
 
-  const cleanImprovedJson = improved.choices[0].message.content
-    .replace(/```(json)?\n?/g, '')
-    .trim();
-  const improvedProgram = JSON.parse(cleanImprovedJson);
+  const improvedProgram = cleanAndParseJSON(improved.choices[0].message.content);
 
   return {
     initial: initialProgram,
