@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "api": "node src/api/index.js"
+    "server": "node src/api/index.js"
   },
   "dependencies": {
     "react": "^18.2.0",
