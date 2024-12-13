@@ -1,10 +1,13 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.VITE_OPENAI_API_KEY
-});
-
 export async function generateLoyaltyProgram(businessName) {
+  console.log('Generating loyalty program for:', businessName);
+  console.log('OpenAI API Key exists:', !!process.env.VITE_OPENAI_API_KEY);
+
+  const openai = new OpenAI({
+    apiKey: process.env.VITE_OPENAI_API_KEY
+  });
+
   const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
   Always respond with valid JSON in the following format:
   {
@@ -28,6 +31,7 @@ export async function generateLoyaltyProgram(businessName) {
   const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business.`;
 
   try {
+    console.log('Making OpenAI API call...');
     const completion = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
@@ -38,11 +42,14 @@ export async function generateLoyaltyProgram(businessName) {
       response_format: { type: "json_object" }
     });
 
+    console.log('OpenAI API call successful');
     const response = JSON.parse(completion.choices[0].message.content);
-    console.log('OpenAI response:', response);
     return response;
   } catch (error) {
     console.error('OpenAI API error:', error);
-    throw new Error('Failed to generate loyalty program: ' + error.message);
+    if (error.response) {
+      console.error('OpenAI API response:', error.response.data);
+    }
+    throw new Error(`Failed to generate loyalty program: ${error.message}`);
   }
 }
