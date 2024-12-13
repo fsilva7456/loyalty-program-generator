@@ -2,44 +2,63 @@ import OpenAI from 'openai';
 import { drivers, evaluateDriver } from '../drivers/index.js';
 
 async function generateInitialProgram(openai, businessName) {
-  const systemPrompt = `You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.
-  Return only valid JSON without any additional text, markdown, or explanation, using this exact format:
-  {
-    "programName": "string",
-    "description": "string",
-    "pointSystem": {
-      "earning": "string",
-      "redemption": "string"
-    },
-    "tiers": [
-      {
-        "name": "string",
-        "requirements": "string",
-        "benefits": ["string"]
-      }
-    ],
-    "specialPerks": ["string"],
-    "signupProcess": "string"
-  }`;
-
-  const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Be innovative and specific with the rewards structure. Return only the JSON response without any markdown formatting.`;
+  const prompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Be innovative and specific with the rewards structure.`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4',
     messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
+      { 
+        role: 'system', 
+        content: 'You are a loyalty program design expert. Create detailed, practical loyalty programs tailored to specific businesses.'
+      },
+      { role: 'user', content: prompt }
     ],
+    response_format: { type: "json_object" },
+    functions: [
+      {
+        name: "create_loyalty_program",
+        parameters: {
+          type: "object",
+          properties: {
+            programName: { type: "string" },
+            description: { type: "string" },
+            pointSystem: {
+              type: "object",
+              properties: {
+                earning: { type: "string" },
+                redemption: { type: "string" }
+              },
+              required: ["earning", "redemption"]
+            },
+            tiers: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  requirements: { type: "string" },
+                  benefits: { type: "array", items: { type: "string" } }
+                },
+                required: ["name", "requirements", "benefits"]
+              }
+            },
+            specialPerks: { type: "array", items: { type: "string" } },
+            signupProcess: { type: "string" }
+          },
+          required: ["programName", "description", "pointSystem", "tiers", "specialPerks", "signupProcess"]
+        }
+      }
+    ],
+    function_call: { name: "create_loyalty_program" },
     temperature: 0.7
   });
 
   try {
-    const cleanJson = completion.choices[0].message.content
-      .replace(/```(json)?\n?/g, '')
-      .trim();
-    return JSON.parse(cleanJson);
+    const functionCallArguments = completion.choices[0].message.function_call.arguments;
+    return JSON.parse(functionCallArguments);
   } catch (error) {
     console.error('Error parsing program generation response:', error);
+    console.error('Raw response:', completion.choices[0].message);
     throw new Error('Failed to parse program generation response');
   }
 }
@@ -70,37 +89,43 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
 
   console.log('All driver evaluations complete:', Object.keys(driverEvaluations));
 
-  const analysisPrompt = `Analyze this loyalty program for ${businessName} and identify potential weaknesses or areas for improvement. Consider:
+  const analysisPrompt = `Analyze this loyalty program for ${businessName} and identify potential weaknesses and areas for improvement, considering:
   1. Customer psychology and motivation
   2. Industry competition
   3. Technical feasibility
   4. Cost effectiveness
   5. Customer pain points
-  Return only valid JSON without any markdown formatting in this format:
-  {
-    "weaknesses": ["string"],
-    "suggestedImprovements": ["string"]
-  }`;
+
+  Program to analyze: ${JSON.stringify(initialProgram)}`;
 
   const analysis = await openai.chat.completions.create({
     model: 'gpt-4',
     messages: [
       { 
         role: 'system', 
-        content: 'You are a critical loyalty program analyst. Return only plain JSON without any markdown formatting.' 
+        content: 'You are a critical loyalty program analyst. Return a structured analysis of program weaknesses and improvements.'
       },
-      { 
-        role: 'user', 
-        content: `${analysisPrompt}\n\nProgram to analyze: ${JSON.stringify(initialProgram)}` 
+      { role: 'user', content: analysisPrompt }
+    ],
+    response_format: { type: "json_object" },
+    functions: [
+      {
+        name: "analyze_program",
+        parameters: {
+          type: "object",
+          properties: {
+            weaknesses: { type: "array", items: { type: "string" } },
+            suggestedImprovements: { type: "array", items: { type: "string" } }
+          },
+          required: ["weaknesses", "suggestedImprovements"]
+        }
       }
     ],
+    function_call: { name: "analyze_program" },
     temperature: 0.7
   });
 
-  const cleanAnalysisJson = analysis.choices[0].message.content
-    .replace(/```(json)?\n?/g, '')
-    .trim();
-  const analysisResult = JSON.parse(cleanAnalysisJson);
+  const analysisResult = JSON.parse(analysis.choices[0].message.function_call.arguments);
 
   // Generate improved version considering all driver evaluations
   const evaluationSummary = Object.entries(driverEvaluations)
@@ -112,27 +137,58 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
     Consider the following driver evaluations:
     ${evaluationSummary}
 
-    Return only plain JSON without any markdown formatting.`;
+    Original program: ${JSON.stringify(initialProgram)}`;
 
   const improved = await openai.chat.completions.create({
     model: 'gpt-4',
     messages: [
       { 
         role: 'system', 
-        content: 'You are a loyalty program design expert. Return only plain JSON without any markdown formatting, using the same schema as the original program.' 
+        content: 'You are a loyalty program design expert. Create an improved version of the program that addresses identified weaknesses.'
       },
-      { 
-        role: 'user', 
-        content: `Original program: ${JSON.stringify(initialProgram)}\n\n${improvementPrompt}` 
+      { role: 'user', content: improvementPrompt }
+    ],
+    response_format: { type: "json_object" },
+    functions: [
+      {
+        name: "create_loyalty_program",
+        parameters: {
+          type: "object",
+          properties: {
+            programName: { type: "string" },
+            description: { type: "string" },
+            pointSystem: {
+              type: "object",
+              properties: {
+                earning: { type: "string" },
+                redemption: { type: "string" }
+              },
+              required: ["earning", "redemption"]
+            },
+            tiers: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  requirements: { type: "string" },
+                  benefits: { type: "array", items: { type: "string" } }
+                },
+                required: ["name", "requirements", "benefits"]
+              }
+            },
+            specialPerks: { type: "array", items: { type: "string" } },
+            signupProcess: { type: "string" }
+          },
+          required: ["programName", "description", "pointSystem", "tiers", "specialPerks", "signupProcess"]
+        }
       }
     ],
+    function_call: { name: "create_loyalty_program" },
     temperature: 0.7
   });
 
-  const cleanImprovedJson = improved.choices[0].message.content
-    .replace(/```(json)?\n?/g, '')
-    .trim();
-  const improvedProgram = JSON.parse(cleanImprovedJson);
+  const improvedProgram = JSON.parse(improved.choices[0].message.function_call.arguments);
 
   return {
     initial: initialProgram,
