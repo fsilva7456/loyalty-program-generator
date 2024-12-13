@@ -103,12 +103,14 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   const analysisResult = JSON.parse(cleanAnalysisJson);
 
   // Generate improved version considering all driver evaluations
+  const evaluationSummary = Object.entries(driverEvaluations)
+    .map(([driverName, driverResult]) => `${driverName}: ${JSON.stringify(driverResult)}`)
+    .join('\n');
+
   const improvementPrompt = `Create an improved version of this loyalty program addressing these weaknesses: ${JSON.stringify(analysisResult.weaknesses)}
     
     Consider the following driver evaluations:
-    ${Object.entries(driverEvaluations)
-      .map(([key, evaluation]) => `${key}: ${JSON.stringify(evaluation)}`)
-      .join('\n')}
+    ${evaluationSummary}
 
     Return only plain JSON without any markdown formatting.`;
 
