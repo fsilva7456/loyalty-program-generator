@@ -12,6 +12,11 @@ function App() {
     setError(null);
     
     try {
+      // First, test the API connection
+      const testResponse = await fetch('http://localhost:3001/test');
+      console.log('Test response:', await testResponse.json());
+
+      // Then make the actual API call
       const response = await fetch('http://localhost:3001/api/generate', {
         method: 'POST',
         headers: {
@@ -21,10 +26,11 @@ function App() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate loyalty program');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('Received data:', data);
       setLoyaltyProgram(data);
     } catch (error) {
       console.error('Error:', error);
@@ -64,7 +70,7 @@ function App() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-md mb-8">
-          {error}
+          Error: {error}
         </div>
       )}
 
