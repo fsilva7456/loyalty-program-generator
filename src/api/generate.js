@@ -147,8 +147,121 @@ Ensure ALL fields are included and properly formatted.`;
 }
 
 async function analyzeAndImprove(openai, businessName, initialProgram) {
-  // Rest of the analyzeAndImprove function remains the same
-  ...
+  const driverEvaluations = {};
+  const driverNames = Object.keys(drivers);
+  
+  console.log('Evaluating drivers:', driverNames);
+  
+  try {
+    for (const driverKey of driverNames) {
+      console.log(`Starting evaluation for ${driverKey} driver...`);
+      try {
+        const evaluation = await evaluateDriver(openai, drivers[driverKey], initialProgram);
+        console.log(`Successfully evaluated ${driverKey} driver`);
+        driverEvaluations[driverKey] = evaluation;
+      } catch (driverError) {
+        console.error(`Error evaluating ${driverKey} driver:`, driverError);
+        throw driverError;
+      }
+    }
+  } catch (error) {
+    console.error('Error during driver evaluations:', error);
+    throw error;
+  }
+
+  console.log('All driver evaluations complete:', Object.keys(driverEvaluations));
+
+  // Collect all improvements from driver evaluations
+  const driverImprovements = [];
+  Object.entries(driverEvaluations).forEach(([driverName, evaluation]) => {
+    if (evaluation.subDriverAnalysis) {
+      Object.entries(evaluation.subDriverAnalysis).forEach(([subDriver, analysis]) => {
+        if (analysis.improvements) {
+          analysis.improvements.forEach(improvement => {
+            driverImprovements.push({
+              driver: driverName,
+              subDriver,
+              improvement
+            });
+          });
+        }
+      });
+    }
+  });
+
+  const analysisPrompt = `Analyze this loyalty program for ${businessName}, focusing on both practical aspects and behavioral science principles.
+
+  Consider:
+  1. Customer psychology and motivation
+  2. Habit formation and engagement loops
+  3. Goal structures and progress mechanics
+  4. Social proof and status elements
+  5. Variable reward effectiveness
+  6. Loss aversion triggers
+  7. Technical feasibility
+  8. Cost effectiveness
+
+  Return only valid JSON without any markdown formatting in this format:
+  {
+    "weaknesses": ["string"],
+    "suggestedImprovements": ["string"],
+    "behavioralAnalysis": {
+      "effectivePrinciples": ["string"],
+      "missedOpportunities": ["string"]
+    }
+  }
+
+  Program to analyze: ${JSON.stringify(initialProgram)}`;
+
+  const analysis = await makeOpenAIRequest(openai, [
+    { 
+      role: 'system', 
+      content: 'You are a loyalty program analyst specializing in behavioral science and customer psychology. Return only plain JSON without any markdown formatting.' 
+    },
+    { role: 'user', content: analysisPrompt }
+  ]);
+
+  const analysisResult = cleanAndParseJSON(analysis);
+
+  const improvementPrompt = `Create an improved version of this loyalty program addressing both general weaknesses and specific driver improvements, while strengthening behavioral science elements.
+
+  General Weaknesses to Address:
+  ${JSON.stringify(analysisResult.weaknesses)}
+
+  General Improvements Suggested:
+  ${JSON.stringify(analysisResult.suggestedImprovements)}
+
+  Behavioral Analysis:
+  ${JSON.stringify(analysisResult.behavioralAnalysis)}
+
+  Specific Driver Improvements:
+  ${driverImprovements.map(imp => `[${imp.driver} - ${imp.subDriver}] ${imp.improvement}`).join('\n')}
+
+  Original Program:
+  ${JSON.stringify(initialProgram, null, 2)}
+
+  Create a comprehensive improved version that addresses all points while strengthening behavioral mechanics. Return only the JSON response using the exact same format as the original program.`;
+
+  const improved = await makeOpenAIRequest(openai, [
+    { 
+      role: 'system', 
+      content: 'You are a loyalty program design expert specializing in behavioral science. Return only plain JSON without any markdown formatting, using the same schema as the original program.' 
+    },
+    { role: 'user', content: improvementPrompt }
+  ]);
+
+  const improvedProgram = cleanAndParseJSON(improved);
+
+  return {
+    initial: initialProgram,
+    analysis: {
+      weaknesses: analysisResult.weaknesses,
+      suggestedImprovements: analysisResult.suggestedImprovements,
+      behavioralAnalysis: analysisResult.behavioralAnalysis,
+      drivers: driverEvaluations
+    },
+    improved: improvedProgram
+  };
 }
 
 export async function generateLoyaltyProgram(businessName) {
