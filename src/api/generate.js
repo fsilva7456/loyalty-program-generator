@@ -71,6 +71,20 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
 
   console.log('All driver evaluations complete:', Object.keys(driverEvaluations));
 
+  // Collect all improvements from driver evaluations
+  const driverImprovements = [];
+  Object.entries(driverEvaluations).forEach(([driverName, evaluation]) => {
+    Object.entries(evaluation.subDriverAnalysis).forEach(([subDriver, analysis]) => {
+      analysis.improvements.forEach(improvement => {
+        driverImprovements.push({
+          driver: driverName,
+          subDriver,
+          improvement
+        });
+      });
+    });
+  });
+
   const analysisPrompt = `Analyze this loyalty program for ${businessName} and identify potential weaknesses and areas for improvement. Consider:
   1. Customer psychology and motivation
   2. Industry competition
@@ -103,19 +117,22 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
     .trim();
   const analysisResult = JSON.parse(cleanAnalysisJson);
 
-  // Generate improved version considering all driver evaluations
-  const evaluationSummary = Object.entries(driverEvaluations)
-    .map(([driverName, driverResult]) => `${driverName}: ${JSON.stringify(driverResult)}`)
-    .join('\n');
+  // Generate improved version considering all general and driver-specific improvements
+  const improvementPrompt = `Create an improved version of this loyalty program addressing both general weaknesses and specific driver improvements.
 
-  const improvementPrompt = `Create an improved version of this loyalty program addressing these weaknesses: ${JSON.stringify(analysisResult.weaknesses)}
-    
-    Consider the following driver evaluations:
-    ${evaluationSummary}
+  General Weaknesses to Address:
+  ${JSON.stringify(analysisResult.weaknesses)}
 
-    Return a new program using the exact same JSON format as the original program, with no additional text or formatting.
-    
-    Original program format: ${JSON.stringify(initialProgram)}`;
+  General Improvements Suggested:
+  ${JSON.stringify(analysisResult.suggestedImprovements)}
+
+  Specific Driver Improvements:
+  ${driverImprovements.map(imp => `[${imp.driver} - ${imp.subDriver}] ${imp.improvement}`).join('\n')}
+
+  Original Program:
+  ${JSON.stringify(initialProgram, null, 2)}
+
+  Create a comprehensive improved version that addresses all these points while maintaining a cohesive and practical program design. Return only the JSON response using the exact same format as the original program.`;
 
   const improved = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
