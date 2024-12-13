@@ -1,6 +1,32 @@
 import OpenAI from 'openai';
 import { drivers, evaluateDriver } from '../drivers/index.js';
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function retryOperation(operation, retries = MAX_RETRIES) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      console.error(`Attempt ${i + 1} failed:`, error.message);
+      
+      if (i === retries - 1) throw error; // Last attempt failed
+      
+      if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+        console.log(`Retrying in ${RETRY_DELAY/1000} seconds...`);
+        await delay(RETRY_DELAY);
+      } else {
+        throw error; // Don't retry other types of errors
+      }
+    }
+  }
+}
+
 function cleanAndParseJSON(text) {
   try {
     return JSON.parse(text);
@@ -24,6 +50,29 @@ function cleanAndParseJSON(text) {
       throw new Error(`Failed to parse JSON: ${e2.message}`);
     }
   }
+}
+
+async function makeOpenAIRequest(openai, messages, model = 'gpt-4o-mini', temperature = 0.7) {
+  const response = await retryOperation(async () => {
+    try {
+      const completion = await openai.chat.completions.create({
+        model,
+        messages,
+        temperature
+      });
+      return cleanAndParseJSON(completion.choices[0].message.content);
+    } catch (error) {
+      if (error.code === 'ENOTFOUND') {
+        error.userMessage = 'Unable to connect to OpenAI. Please check your internet connection.';
+      } else if (error.code === 'ETIMEDOUT') {
+        error.userMessage = 'Connection to OpenAI timed out. Please try again.';
+      } else {
+        error.userMessage = 'An error occurred while communicating with OpenAI.';
+      }
+      throw error;
+    }
+  });
+  return response;
 }
 
 async function generateInitialProgram(openai, businessName) {
@@ -88,28 +137,10 @@ async function generateInitialProgram(openai, businessName) {
 
   Use the exact same JSON structure as the example program.`;
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { 
-        role: 'system',
-        content: systemPrompt
-      },
-      { 
-        role: 'user',
-        content: userPrompt
-      }
-    ],
-    temperature: 0.7
-  });
-
-  try {
-    return cleanAndParseJSON(completion.choices[0].message.content);
-  } catch (error) {
-    console.error('Error parsing program generation response:', error);
-    console.error('Raw response:', completion.choices[0].message.content);
-    throw new Error('Failed to parse program generation response');
-  }
+  return await makeOpenAIRequest(openai, [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ]);
 }
 
 async function analyzeAndImprove(openai, businessName, initialProgram) {
@@ -125,6 +156,21 @@ export async function generateLoyaltyProgram(businessName) {
   });
 
   try {
+    console.log('Testing OpenAI connection...');
+    await retryOperation(async () => {
+      try {
+        const response = await fetch('https://api.openai.com/v1/engines', {
+          headers: {
+            'Authorization': `Bearer ${process.env.VITE_OPENAI_API_KEY}`
+          }
+        });
+        if (!response.ok) throw new Error('OpenAI API test failed');
+      } catch (error) {
+        console.error('OpenAI connection test failed:', error);
+        throw error;
+      }
+    });
+
     console.log('Generating initial program...');
     const initialProgram = await generateInitialProgram(openai, businessName);
     
@@ -138,6 +184,6 @@ export async function generateLoyaltyProgram(businessName) {
     if (error.response) {
       console.error('OpenAI API response:', error.response.data);
     }
-    throw new Error(`Failed to generate loyalty program: ${error.message}`);
+    throw new Error(error.userMessage || `Failed to generate loyalty program: ${error.message}`);
   }
 }
