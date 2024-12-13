@@ -1,9 +1,11 @@
 import { accessDriver } from './accessDriver';
 import { timeDriver } from './timeDriver';
+import { financialDriver } from './financialDriver';
 
 export const drivers = {
   access: accessDriver,
-  time: timeDriver
+  time: timeDriver,
+  financial: financialDriver
 };
 
 export const evaluateDriver = async (openai, driver, program) => {
