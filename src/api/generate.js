@@ -25,7 +25,7 @@ async function generateInitialProgram(openai, businessName) {
   const userPrompt = `Create a comprehensive loyalty program for ${businessName}. Consider industry standards and customer expectations for this type of business. Be innovative and specific with the rewards structure. Return only the JSON response without any markdown formatting.`;
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
@@ -50,11 +50,25 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   const driverNames = Object.keys(drivers);
   
   console.log('Evaluating drivers:', driverNames);
-  for (const driverKey of driverNames) {
-    console.log(`Evaluating ${driverKey} driver...`);
-    driverEvaluations[`${driverKey}Evaluation`] = 
-      await evaluateDriver(openai, drivers[driverKey], initialProgram);
+  
+  try {
+    for (const driverKey of driverNames) {
+      console.log(`Starting evaluation for ${driverKey} driver...`);
+      try {
+        const evaluation = await evaluateDriver(openai, drivers[driverKey], initialProgram);
+        console.log(`Successfully evaluated ${driverKey} driver`);
+        driverEvaluations[driverKey] = evaluation;
+      } catch (driverError) {
+        console.error(`Error evaluating ${driverKey} driver:`, driverError);
+        throw driverError;
+      }
+    }
+  } catch (error) {
+    console.error('Error during driver evaluations:', error);
+    throw error;
   }
+
+  console.log('All driver evaluations complete:', Object.keys(driverEvaluations));
 
   const analysisPrompt = `Analyze this loyalty program for ${businessName} and identify potential weaknesses or areas for improvement. Consider:
   1. Customer psychology and motivation
@@ -69,7 +83,7 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   }`;
 
   const analysis = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4',
     messages: [
       { 
         role: 'system', 
@@ -99,7 +113,7 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
     Return only plain JSON without any markdown formatting.`;
 
   const improved = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4',
     messages: [
       { 
         role: 'system', 
@@ -121,8 +135,9 @@ async function analyzeAndImprove(openai, businessName, initialProgram) {
   return {
     initial: initialProgram,
     analysis: {
-      ...analysisResult,
-      ...driverEvaluations
+      weaknesses: analysisResult.weaknesses,
+      suggestedImprovements: analysisResult.suggestedImprovements,
+      drivers: driverEvaluations
     },
     improved: improvedProgram
   };
