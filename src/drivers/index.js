@@ -3,13 +3,17 @@ import { timeDriver } from './timeDriver.js';
 import { financialDriver } from './financialDriver.js';
 import { securityDriver } from './securityDriver.js';
 import { learningDriver } from './learningDriver.js';
+import { communicationsDriver } from './communicationsDriver.js';
+import { knowMeDriver } from './knowMeDriver.js';
 
 export const drivers = {
   access: accessDriver,
   time: timeDriver,
   financial: financialDriver,
   security: securityDriver,
-  learning: learningDriver
+  learning: learningDriver,
+  communications: communicationsDriver,
+  knowMe: knowMeDriver
 };
 
 export async function evaluateDriver(openai, driver, program) {
